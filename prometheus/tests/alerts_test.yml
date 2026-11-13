@@ -1,0 +1,75 @@
+# Юнит-тесты правил алертов: promtool test rules prometheus/tests/alerts_test.yml
+# Задаём «историю» метрик и проверяем, какие алерты сработают и в какой момент.
+rule_files:
+  - ../rules/alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: Сайт лежит дольше минуты — критический алерт
+    interval: 1m
+    input_series:
+      - series: 'site_up{name="shop", url="https://shop.example"}'
+        values: "1 1 0 0 0"
+    alert_rule_test:
+      - eval_time: 2m  # только что упал, for: 1m ещё не прошёл
+        alertname: SiteDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: SiteDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              name: shop
+              url: https://shop.example
+            exp_annotations:
+              summary: "Сайт shop недоступен"
+              description: "https://shop.example не отвечает ожидаемым кодом больше минуты."
+
+  - name: Короткий сбой на одну проверку не будит дежурного
+    interval: 1m
+    input_series:
+      - series: 'site_up{name="shop", url="https://shop.example"}'
+        values: "1 0 1 1 1"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: SiteDown
+        exp_alerts: []
+
+  - name: Сертификат на 10 днях — warning, но ещё не critical
+    interval: 1m
+    input_series:
+      - series: 'site_tls_cert_expiry_days{name="shop", url="https://shop.example"}'
+        values: "10x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: TLSCertExpiringSoon
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              name: shop
+              url: https://shop.example
+            exp_annotations:
+              summary: "Сертификат shop скоро истекает"
+              description: "До окончания сертификата 10 дн."
+      - eval_time: 15m
+        alertname: TLSCertExpiryCritical
+        exp_alerts: []
+
+  - name: Доля ошибок booking-api выше 5%
+    interval: 1m
+    input_series:
+      # 100 запросов в минуту, из них 10 — с ошибкой 5xx
+      - series: 'http_requests_total{job="booking-api", handler="/bookings", method="POST", status="2xx"}'
+        values: "0+90x20"
+      - series: 'http_requests_total{job="booking-api", handler="/bookings", method="POST", status="5xx"}'
+        values: "0+10x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BookingApiHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "booking-api: больше 5% ответов с ошибкой 5xx"
+              description: "Доля ошибок 10%."

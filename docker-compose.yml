@@ -1,0 +1,78 @@
+# Стек мониторинга. Веб-интерфейсы по умолчанию слушают только 127.0.0.1:
+# на сервере к ним ходят через SSH-туннель или reverse proxy с HTTPS, а не напрямую.
+
+x-common: &common
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  prometheus:
+    <<: *common
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle  # перечитать конфиг: curl -X POST localhost:9090/-/reload
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  alertmanager:
+    <<: *common
+    image: prom/alertmanager:v0.28.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./secrets:/etc/alertmanager/secrets:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:9093:9093"
+
+  grafana:
+    <<: *common
+    image: grafana/grafana:12.0.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?задайте GRAFANA_ADMIN_PASSWORD в .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/overview.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:3000:3000"
+    depends_on: [prometheus]
+
+  node-exporter:
+    <<: *common
+    image: prom/node-exporter:v1.9.1
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+
+  site-exporter:
+    <<: *common
+    build: ./exporter
+    volumes:
+      - ./targets.yml:/etc/site-exporter/targets.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:

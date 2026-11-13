@@ -1,0 +1,5 @@
+- name: Перезапустить стек
+  ansible.builtin.command:
+    cmd: docker compose up -d --build --force-recreate --remove-orphans
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true

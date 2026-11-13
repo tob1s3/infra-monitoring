@@ -1,0 +1,104 @@
+groups:
+  - name: sites
+    rules:
+      - alert: SiteDown
+        expr: site_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Сайт {{ $labels.name }} недоступен"
+          description: "{{ $labels.url }} не отвечает ожидаемым кодом больше минуты."
+
+      - alert: SiteSlow
+        expr: site_response_seconds > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Сайт {{ $labels.name }} отвечает медленно"
+          description: "Время ответа {{ $value | humanizeDuration }} дольше 5 минут."
+
+      - alert: TLSCertExpiringSoon
+        expr: site_tls_cert_expiry_days < 14
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Сертификат {{ $labels.name }} скоро истекает"
+          description: "До окончания сертификата {{ $value | printf \"%.0f\" }} дн."
+
+      - alert: TLSCertExpiryCritical
+        expr: site_tls_cert_expiry_days < 3
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Сертификат {{ $labels.name }} истекает через {{ $value | printf \"%.0f\" }} дн."
+          description: "Нужно срочно продлить сертификат для {{ $labels.url }}."
+
+  - name: targets
+    rules:
+      - alert: ScrapeTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus не может собрать метрики {{ $labels.job }}"
+          description: "Цель {{ $labels.instance }} недоступна больше 2 минут."
+
+  - name: host
+    rules:
+      - alert: HostHighCpu
+        expr: 100 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая загрузка CPU на {{ $labels.instance }}"
+          description: "CPU занят на {{ $value | printf \"%.0f\" }}% дольше 10 минут."
+
+      - alert: HostLowMemory
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Мало свободной памяти на {{ $labels.instance }}"
+          description: "Доступно меньше 10% оперативной памяти."
+
+      - alert: HostDiskAlmostFull
+        expr: >
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+          / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} < 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Диск {{ $labels.mountpoint }} почти заполнен"
+          description: "На {{ $labels.instance }} свободно меньше 10%."
+
+  - name: booking-api
+    rules:
+      - alert: BookingApiHighErrorRate
+        expr: >
+          sum(rate(http_requests_total{job="booking-api", status="5xx"}[5m]))
+          / sum(rate(http_requests_total{job="booking-api"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "booking-api: больше 5% ответов с ошибкой 5xx"
+          description: "Доля ошибок {{ $value | humanizePercentage }}."
+
+      - alert: BookingApiSlow
+        expr: >
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="booking-api"}[5m]))) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "booking-api отвечает медленно"
+          description: "95-й перцентиль времени ответа {{ $value | humanizeDuration }}."

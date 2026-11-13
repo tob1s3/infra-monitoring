@@ -1,0 +1,6 @@
+monitoring_dir: /opt/monitoring
+monitoring_bind_address: 127.0.0.1
+monitoring_interval_seconds: 30
+monitoring_targets: []
+# uid пользователя nobody в образе Alertmanager: ему нужен доступ на чтение к токену
+monitoring_alertmanager_uid: 65534

@@ -1,0 +1,40 @@
+{# Шаблон конфигурации Alertmanager.
+   Рендерится Ansible (роль monitoring) или локально: python scripts/render_config.py #}
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: telegram
+  group_by: [alertname, name, instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Критические алерты повторяем чаще
+    - matchers: ['severity="critical"']
+      receiver: telegram
+      repeat_interval: 1h
+
+inhibit_rules:
+  # Если сайт целиком недоступен, отдельный алерт «медленно отвечает» не нужен
+  - source_matchers: ['alertname="SiteDown"']
+    target_matchers: ['alertname="SiteSlow"']
+    equal: [name]
+  # Критический алерт о сертификате заглушает предупреждение о нём же
+  - source_matchers: ['alertname="TLSCertExpiryCritical"']
+    target_matchers: ['alertname="TLSCertExpiringSoon"']
+    equal: [name]
+
+receivers:
+  - name: telegram
+    telegram_configs:
+      - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+        chat_id: {{ telegram_chat_id | int }}
+        parse_mode: HTML
+        send_resolved: true
+        message: |-
+          {{ '{{' }} if eq .Status "firing" {{ '}}' }}🔴{{ '{{' }} else {{ '}}' }}✅{{ '{{' }} end {{ '}}' }} <b>{{ '{{' }} .CommonLabels.alertname {{ '}}' }}</b> ({{ '{{' }} .CommonLabels.severity {{ '}}' }})
+          {{ '{{' }} range .Alerts {{ '}}' }}
+          {{ '{{' }} .Annotations.summary {{ '}}' }}
+          {{ '{{' }} .Annotations.description {{ '}}' }}
+          {{ '{{' }} end {{ '}}' }}

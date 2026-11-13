@@ -1,0 +1,6 @@
+-r requirements.txt
+pytest>=9.1,<10
+pytest-asyncio>=1.4,<2
+cryptography>=46
+ruff>=0.17,<1
+bandit[toml]>=1.9,<2

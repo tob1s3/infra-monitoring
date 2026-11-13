@@ -1,0 +1,12 @@
+.env
+secrets/*
+!secrets/.gitkeep
+alertmanager/alertmanager.yml
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+ansible/inventory.ini
+*.retry

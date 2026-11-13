@@ -1,0 +1,13 @@
+# Какие сайты проверяет site-exporter. После изменения: docker compose restart site-exporter
+interval_seconds: 30
+targets:
+  # Сервис из проекта booking-api (если запущен на этой же машине на порту 8000)
+  - name: booking-api
+    url: http://host.docker.internal:8000/health
+
+  - name: github
+    url: https://github.com
+
+  - name: spbstu
+    url: https://www.spbstu.ru
+    timeout_seconds: 10

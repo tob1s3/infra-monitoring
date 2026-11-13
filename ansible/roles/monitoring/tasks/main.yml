@@ -1,0 +1,83 @@
+- name: Проверить обязательные переменные
+  ansible.builtin.assert:
+    that:
+      - grafana_admin_password | length >= 8
+      - telegram_bot_token | length > 0
+      - telegram_chat_id | string | regex_search('^-?[0-9]+$')
+      - monitoring_targets | length > 0
+    fail_msg: "Заполните vault.yml (пароль Grafana от 8 символов, токен и chat_id бота) и monitoring_targets"
+  no_log: true
+
+- name: Создать каталоги
+  ansible.builtin.file:
+    path: "{{ monitoring_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: ["", alertmanager, secrets]
+
+- name: Скопировать конфигурацию Prometheus, Grafana и исходники экспортера
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../{{ item }}"
+    dest: "{{ monitoring_dir }}/"
+    owner: root
+    group: root
+    mode: u=rwX,g=rX,o=rX
+  loop: [prometheus, grafana, exporter, docker-compose.yml]
+  notify: Перезапустить стек
+
+- name: Сгенерировать список проверяемых сайтов
+  ansible.builtin.template:
+    src: targets.yml.j2
+    dest: "{{ monitoring_dir }}/targets.yml"
+    mode: "0644"
+  notify: Перезапустить стек
+
+- name: Сгенерировать конфигурацию Alertmanager (тот же шаблон, что и для локального запуска)
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../alertmanager/alertmanager.yml.j2"
+    dest: "{{ monitoring_dir }}/alertmanager/alertmanager.yml"
+    mode: "0644"
+  notify: Перезапустить стек
+
+- name: Записать токен Telegram-бота
+  ansible.builtin.copy:
+    content: "{{ telegram_bot_token }}"
+    dest: "{{ monitoring_dir }}/secrets/telegram_bot_token"
+    owner: "{{ monitoring_alertmanager_uid }}"
+    mode: "0400"
+  no_log: true
+  notify: Перезапустить стек
+
+- name: Записать .env для docker compose
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ monitoring_dir }}/.env"
+    owner: root
+    mode: "0600"
+  no_log: true
+  notify: Перезапустить стек
+
+- name: Собрать и запустить контейнеры
+  ansible.builtin.command:
+    cmd: docker compose up -d --build --remove-orphans
+    chdir: "{{ monitoring_dir }}"
+  register: monitoring_compose_up
+  changed_when: "'Started' in monitoring_compose_up.stderr or 'Recreated' in monitoring_compose_up.stderr"
+
+- name: Дождаться готовности Prometheus
+  ansible.builtin.uri:
+    url: "http://{{ monitoring_bind_address }}:9090/-/ready"
+  register: monitoring_prometheus_ready
+  until: monitoring_prometheus_ready.status == 200
+  retries: 20
+  delay: 3
+
+- name: Дождаться готовности Grafana
+  ansible.builtin.uri:
+    url: "http://{{ monitoring_bind_address }}:3000/api/health"
+  register: monitoring_grafana_ready
+  until: monitoring_grafana_ready.status == 200
+  retries: 20
+  delay: 3

@@ -1,0 +1,5 @@
+# 1) cp vault.example.yml vault.yml и заполните значения
+# 2) ansible-vault encrypt vault.yml — в репозиторий попадает только зашифрованный файл
+vault_grafana_admin_password: change-me
+vault_telegram_bot_token: "123456:ABC-your-bot-token"
+vault_telegram_chat_id: -1001234567890

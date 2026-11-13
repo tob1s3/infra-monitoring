@@ -1,0 +1,13 @@
+# Управляется Ansible — правьте monitoring_targets в group_vars, а не этот файл
+interval_seconds: {{ monitoring_interval_seconds }}
+targets:
+{% for target in monitoring_targets %}
+  - name: {{ target.name }}
+    url: {{ target.url }}
+{% if target.expected_status is defined %}
+    expected_status: {{ target.expected_status | to_json }}
+{% endif %}
+{% if target.timeout_seconds is defined %}
+    timeout_seconds: {{ target.timeout_seconds }}
+{% endif %}
+{% endfor %}

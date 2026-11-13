@@ -1,0 +1,10 @@
+# Разворачивает стек мониторинга на чистом сервере:
+#   ansible-playbook playbook.yml --ask-vault-pass
+- name: Мониторинг на Prometheus и Grafana
+  hosts: monitoring
+  become: true
+  roles:
+    - role: docker
+      tags: [docker]
+    - role: monitoring
+      tags: [monitoring]
