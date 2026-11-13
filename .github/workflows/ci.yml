@@ -20,8 +20,8 @@ jobs:
       run:
         working-directory: exporter
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -34,7 +34,7 @@ jobs:
     name: Конфиг и алерты Prometheus
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: promtool check config
         run: >
           docker run --rm -v "$PWD/prometheus:/etc/prometheus:ro" --entrypoint promtool
@@ -48,8 +48,8 @@ jobs:
     name: Конфиг Alertmanager
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install jinja2
@@ -67,8 +67,8 @@ jobs:
     name: Дашборд Grafana актуален
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: python scripts/build_dashboard.py
@@ -82,8 +82,8 @@ jobs:
       run:
         working-directory: ansible
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install ansible-core ansible-lint
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [exporter, prometheus, alertmanager]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: docker compose config
         env:
           GRAFANA_ADMIN_PASSWORD: ci-dummy-password
@@ -104,8 +104,8 @@ jobs:
       - name: Сборка образа site-exporter
         run: docker build -t site-exporter:${{ github.sha }} exporter
       - name: Trivy (уязвимости в образе)
-        # Для боевых проектов action лучше закреплять по SHA коммита, а не по тегу
-        uses: aquasecurity/trivy-action@0.28.0
+        # Сторонний action закреплён по SHA коммита: тег можно перезаписать, коммит — нет
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: site-exporter:${{ github.sha }}
           severity: HIGH,CRITICAL
